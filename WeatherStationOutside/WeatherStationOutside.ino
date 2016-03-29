@@ -14,8 +14,7 @@ boolean flipped = false;
 
 long threshTime = 100000;
 
-#define TX_PIN 3  //pin where your transmitter is connected
-  
+#define TX_PIN 3  
 
 void setup(){
  
