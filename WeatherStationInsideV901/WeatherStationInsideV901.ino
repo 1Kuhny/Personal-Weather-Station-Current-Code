@@ -145,7 +145,6 @@ lcd.print("BMP180");
 delay(300);
   if(!bmp.begin())
   {
-    /* There was a problem detecting the BMP085 ... check your connections */
     lcd.print("BMP180 ERROR");
     while(1);
   }
