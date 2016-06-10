@@ -1,8 +1,31 @@
-#include <Manchester.h>
+ #include <Manchester.h>
 #include <Wire.h>
 #include <Adafruit_Sensor.h>
 #include <Adafruit_BMP085_U.h>
 
+
+
+/*
+READREADREADREADREADREADREADREADREADREADREADREADREADREADREADREAD
+READREADREADREADREADREADREADREADREADREADREADREADREADREADREADREAD
+
+I need to upload this yet. ran out of time last night
+
+/////////////////////////////////////////
+/////////////////////////////////////////
+/////////////////////////////////////////
+
+I put rainTime in place of rainRate on the serial output for debugging
+Replace this back to rainRate when done.
+
+do a find search for this "passcode" to go right to it:  fghtr
+
+
+
+READREADREADREADREADREADREADREADREADREADREADREADREADREADREADREADREAD
+READREADREADREADREADREADREADREADREADREADREADREADREADREADREADREADREAD
+
+*/
 #include "DHT.h"
 
 #define DHTPIN 8     // what digital pin we're connected to
@@ -15,26 +38,30 @@
 Adafruit_BMP085_Unified bmp = Adafruit_BMP085_Unified(10085);
 
 DHT dht(DHTPIN, DHTTYPE);
-
+boolean currentlyTilted;
 #include <SoftwareSerial.h>
 const int TxPin = 2;
 SoftwareSerial lcd = SoftwareSerial(255, TxPin);
-
+boolean alreadySetRain = false;
+float oldRain = 0.0;
 int yLightning = 0;
 boolean hasntDisplayed = false;
-
+boolean clockOn = false;
 float hi = 0;
 int yGust = 0;
-
+boolean readingRain;
 long OPFrames = 0;
 float stormPressure = 0.0;
-
+float rainAmount;
 boolean dayLoop = false;
 long forcastUpdateTime = 0;
 long gustResetTime = 530000;
 long dataUpdate;
 long pTime;
 
+float rainRate;
+
+boolean readyForNextFlip;
 
 int strikeCount;
 
@@ -58,10 +85,6 @@ boolean butReleased;
 int digitPlace = 1;
 
 int pageNum = 1;
-
-float rainRate = 0.0;
-float rainCount = 0.0;
-
 float oldPressure = 0.00;
 float newPressure = 0.00;
 long pressure = 0;
@@ -79,19 +102,21 @@ boolean HL = false;
 
 boolean readingWind = false;
 boolean readingTemp = false;
+boolean readingRainRate = false;
+boolean readingRainAmount = false;
 int hoursPassed = 0;
 boolean fullReadComplete = false;
 
 
 int gust = 0;
 int wind = 0;
-String forecast = "Undecided";
+String forecast = "Acclimating...";
 boolean updateForecast = false;
 long i;
-
+long rainTime;
 int tempCal = 29;
 float oldoldPressure;
-float rainAmount = 0.0;
+float oldRainAmount = 0.0;
 
 int temp = 0;
  
@@ -112,6 +137,8 @@ int isROF = 0;
 boolean pStartup = false;
 long transmitSerialDataTime = 0;
 float h = 0;
+boolean clockStarted;
+boolean rainRateCalced = true;
 
 int Wadd = B11101110;
 int Radd = B11101111;
@@ -121,18 +148,28 @@ long alertTime = 0;
 float newTemp = 0.0;
 
 float pressureCal = 0.66;
-
+long resetRainRateTime;
 boolean startingUp = true;
 
 boolean updatePress = false;
 short temperature;
 
+boolean needToTurnOff = false;
 
-
+boolean canRun = false;
 boolean AMPM = true; //true if AM
 
 boolean canProgress = true;
 
+int calL1 = 0;
+int calL2 = 0;
+int calL3 = 0;
+
+int calLightning = 0;
+
+long oldRainTime;
+
+int lightningAdd = 50;
 
 void setup()
 {
@@ -192,7 +229,28 @@ delay(300);
   lcd.write(148);
   lcd.print("Initalized");
   
+  
   delay(1000);
+  lcd.write(12);
+  lcd.print("Calibrating");
+  lcd.write(148);
+  lcd.print("Lightning...");
+  
+  calL1 = analogRead(A2);
+  delay(1000);
+  calL2 = analogRead(A2);
+  delay(1000);
+  calL2 = analogRead(A2);
+  delay(1000);
+  calLightning = int((calL1 + calL2 + calL3)/3 + lightningAdd);
+  delay(1000);
+  
+  lcd.write(12);
+  lcd.print("Lightning");
+  lcd.write(148);
+  lcd.print("Thresh: ");
+  lcd.print(calLightning);
+  
   
   lcd.write(12);
   lcd.print("Initalizing");
@@ -233,7 +291,7 @@ digitalWrite(7, HIGH);
   lcd.write(223);
 lcd.print("Weather Base");
 lcd.write(148);
-lcd.print("Version: 10.0.0"); //change log at bottom
+lcd.print("Version: 10.1.5"); //change log at bottom
 delay(2000);
 lcd.write(12);
 
@@ -254,16 +312,49 @@ lcd.print("Outside Base...");
 }
 void loop() {
   
+    
+  if(clockOn == true && canRun){ 
+    oldRainTime = millis();
+    clockOn = false;
+    canRun = false;
+   } 
+   
+   if(clockOn == false && canRun){
+     
+    long newRainTime = millis();
+     
+    rainTime = newRainTime - oldRainTime;
+    canRun = false;
+     
+    rainRate = (3600000.00/rainTime) * 0.02 / 50.00;
+    rainTime = 0;
+    
+ }
+  
+  
+  if(millis() >= 60000 + rainTime){rainTime = 0; rainRate = 0.00; oldRainTime = 0;}// timeout after 60 seconds
+  
+  
+  
+  
+   
+    
+    
+  
+  
+ 
+  
   ReceiveData();
   
  if(digitalRead(4) == 0 && butReleased == true && canProgress){pageNum++; butReleased = false; soundAlert = false; delay(50);}
  if(digitalRead(4) == 1 && butReleased == false && canProgress){butReleased = true;delay(50);}
  if(digitalRead(7) == 0 && clockSet == true){minute++; delay(200);}
  
- if(analogRead(A2) >= 500){
+ if(analogRead(A2) >= calLightning){
    
    strikeCount++;
-  isRecording = true; 
+  isRecording = true;
+ needToTurnOff = true; 
   recordTime = millis();
  lcd.write(227);
  soundAlert = true;
@@ -271,21 +362,8 @@ void loop() {
  
  }
  
- if(isRecording){
-   
-   digitalWrite(camPin, 1);
-   delay(2000);                    // wake up camera
-   digitalWrite(camPin, 0);
-   delay(1000);
-   
-  digitalWrite(camPin, HIGH);
-  delay(2000);                     //begin Recording
-  digitalWrite(camPin, LOW);
-  isRecording = false;
-   
- }
  
- if(millis() >= recordTime + 18000000){digitalWrite(camPin, HIGH); delay(1000); digitalWrite(camPin, LOW); delay(500); digitalWrite(camPin, HIGH); delay(5100); digitalWrite(camPin, LOW);} //stop recording if no activity for 5 minutes and turn off camera
+ if(millis() >= recordTime + 300000 && needToTurnOff){digitalWrite(camPin, HIGH); delay(1000); digitalWrite(camPin, LOW); delay(500); digitalWrite(camPin, HIGH); delay(5100); digitalWrite(camPin, LOW); needToTurnOff = false;} //stop recording if no activity for 5 minutes and turn off camera
  
  
  if(pageNum == 9){
@@ -307,12 +385,7 @@ void loop() {
   
   i++;
   
-  rainRate = rainCount * 120;
-  
-  if(i >= 530000){
-    rainCount = 0.0;  
-    i = 0;
-  }
+ 
   
   
   
@@ -502,12 +575,12 @@ if(millis() >= OPFrames + 120000){
       oldoldPressure = newPressure;
     }
       
-    if(newPressure == oldoldPressure || newPressure == oldoldPressure - .01 || newPressure == oldoldPressure - .02 || newPressure == oldoldPressure - .03){
+    if(newPressure == oldoldPressure || newPressure == oldoldPressure - .01 || newPressure == oldoldPressure - .02){
       oldoldPressure = newPressure;
-      forecast = "Same As Today";
+      forecast = "Unchanged";
     }
       
-    if(newPressure == oldoldPressure - .04){
+    if(newPressure == oldoldPressure - .04 || newPressure == oldoldPressure - .03){
       if(temp <= DP + 40){
       forecast = "sunny w/ cloud";
       oldoldPressure = newPressure;
@@ -630,7 +703,7 @@ if(millis() >= OPFrames + 120000){
   
   
   if(pageNum == 3){
-    if(fullReadComplete){
+   if(fullReadComplete){
    lcd.write(12);
    lcd.print("High Temp:");
    lcd.print(HT);
@@ -638,8 +711,8 @@ if(millis() >= OPFrames + 120000){
    lcd.write(148);
    lcd.print("Low Temp:");
    lcd.print(LT);
-    readings++;
-    fullReadComplete = false;
+   readings++;
+   fullReadComplete = false;
   }
   
   }
@@ -713,7 +786,7 @@ if(millis() >= OPFrames + 120000){
     Serial.print(",");
     Serial.print(rainAmount); // rain accumulation
     Serial.print(",");
-    Serial.print(rainRate); // rain rate
+    Serial.print(rainRate); // rain rate    fghtr replace rainTime with rainRate when done debugging
     Serial.print(",");
     Serial.print(DP); // dewpoint
     Serial.print(",");
@@ -748,34 +821,57 @@ void ReceiveData(){
   
   if(readingWind){
     
+    fullReadComplete = true;    
+    readingWind = false; readingRainRate = false; readingRain = false;
+    
     if(data <= 200){
-     wind = data; //convert wind to mph which is in presumably FPS
+     wind = data * 2; //multiply the wind by 2 because it is reading 2 times to low... at least im guessing it is...
+     
+    if(wind >= 30){
+       
+    record();
+       
+    }
+     
     } 
-    if(wind <= 150 && wind > gust && wind < gust + 5){gust = wind; lcd.write(225); /*man.transmit(60000);*/}
-     readingWind = false;
+    if(wind <= 150 && wind > gust && wind < gust + 15){gust = wind; lcd.write(225);}
      
-     if(readings < 10){
-     readings++;
-     }
      
-     fullReadComplete = true;
-     
-     if(readings == 3 && !hasntDisplayed){lcd.write(12); lcd.print("Connected!"); hasntDisplayed = true;}
      
      //man.transmit(90000);
      
    }    
    
-   if(data == 30000){readingTemp = true; readingWind = false;}
-   if(data == 40000){readingTemp = false; readingWind = true;}
-   if(data == 50000){readingTemp = false; readingWind = false; rainAmount += .01; rainCount+=.01; lcd.write(227); gotFirstRain = true;}
-   /*
-   if(!gotFirstRain){
-     if(data == 60000){
-        readingTemp = false; readingWind = false; rainAmount += .01; rainCount+=.01; lcd.write(227);
-   }
+  
+   
+   
+  
+   
+   
+   
+ //if(data == 30000){readingTemp = true; readingWind = false; readingRainRate = false; readingRain = false;}
+   if(data == 40000){readingTemp = false; readingWind = true; readingRainRate = false; readingRain = false; alreadySetRain = false;}
+   if(data == 60000 && !alreadySetRain){
+   rainAmount+=.01;
+   alreadySetRain = true;
+   
+   if(!clockOn)clockOn = true;
+   
+   canRun = true;
+   
+   } 
+   
+ 
+// if(data == 72000){readingTemp = false; readingWind = false; readingRainRate = false; readingRain = false;}
+
+   
+   
+  
+     
+   
+  
  }
- */
+ 
  
  gotFirstRain = false;
    
@@ -787,7 +883,7 @@ void ReceiveData(){
                         
    moo = ++moo % 2;
    
-  }
+  
 }
 
 
@@ -822,6 +918,22 @@ void setupCharacters(){
   
 }
 
+void record(){
+ 
+   digitalWrite(camPin, 1);
+   delay(2000);                    // wake up camera
+   digitalWrite(camPin, 0);
+   delay(1000);
+   
+  digitalWrite(camPin, HIGH);
+  delay(2000);                     //begin Recording
+  digitalWrite(camPin, LOW);
+  isRecording = true;
+  needToTurnOff = true; 
+  recordTime = millis();
+  
+}
+
 /*
 
 
@@ -832,7 +944,7 @@ void setupCharacters(){
 
 v 4.0.0        2/29/16
 completly changed wireless functionality using the manchester library
-mounted outside base station to a prop
+mounted outside base station to a proper stand
 
 
 v 5.0.0        3/04/16
