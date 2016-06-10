@@ -5,27 +5,6 @@
 
 
 
-/*
-READREADREADREADREADREADREADREADREADREADREADREADREADREADREADREAD
-READREADREADREADREADREADREADREADREADREADREADREADREADREADREADREAD
-
-I need to upload this yet. ran out of time last night
-
-/////////////////////////////////////////
-/////////////////////////////////////////
-/////////////////////////////////////////
-
-I put rainTime in place of rainRate on the serial output for debugging
-Replace this back to rainRate when done.
-
-do a find search for this "passcode" to go right to it:  fghtr
-
-
-
-READREADREADREADREADREADREADREADREADREADREADREADREADREADREADREADREAD
-READREADREADREADREADREADREADREADREADREADREADREADREADREADREADREADREAD
-
-*/
 #include "DHT.h"
 
 #define DHTPIN 8     // what digital pin we're connected to
